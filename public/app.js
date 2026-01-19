@@ -1,3 +1,155 @@
+// Global State
+let topics = [];
+let selectedTopicId = 'all';
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadTopics();
+    loadContent();
+
+    // Topic Form
+    document.getElementById('addTopicBtn').addEventListener('click', createTopic);
+});
+
+// Load Topics from API
+async function loadTopics() {
+    try {
+        const response = await fetch('/api/topics');
+        topics = await response.json();
+
+        updateTopicSelectors();
+        updateTopicTabs();
+    } catch (error) {
+        console.error('Error loading topics:', error);
+    }
+}
+
+// Update Dropdowns in form
+function updateTopicSelectors() {
+    const selectors = ['imageTopic', 'videoTopic'];
+    selectors.forEach(id => {
+        const select = document.getElementById(id);
+        const currentValue = select.value;
+        select.innerHTML = '';
+
+        topics.forEach(topic => {
+            const option = document.createElement('option');
+            option.value = topic.id;
+            option.textContent = topic.name;
+            select.appendChild(option);
+        });
+
+        if (currentValue) select.value = currentValue;
+    });
+}
+
+// Update Tabs in gallery filter
+function updateTopicTabs() {
+    const tabsContainer = document.getElementById('topicTabs');
+    const allBtn = tabsContainer.querySelector('[data-topic-id="all"]');
+    tabsContainer.innerHTML = '';
+    tabsContainer.appendChild(allBtn);
+
+    topics.forEach(topic => {
+        const btn = document.createElement('button');
+        btn.className = 'topic-tab';
+        btn.textContent = topic.name;
+        btn.dataset.topicId = topic.id;
+        if (selectedTopicId == topic.id) btn.classList.add('active');
+
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.topic-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            selectedTopicId = topic.id;
+            loadContent();
+        });
+
+        tabsContainer.appendChild(btn);
+    });
+
+    allBtn.addEventListener('click', () => {
+        document.querySelectorAll('.topic-tab').forEach(t => t.classList.remove('active'));
+        allBtn.classList.add('active');
+        selectedTopicId = 'all';
+        loadContent();
+    });
+}
+
+// Create New Topic
+async function createTopic() {
+    const input = document.getElementById('newTopicName');
+    const name = input.value.trim();
+    if (!name) return;
+
+    try {
+        const response = await fetch('/api/topics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+
+        if (response.ok) {
+            input.value = '';
+            await loadTopics();
+            showNotification('Success', 'Tema creado correctamente', 'success');
+        }
+    } catch (error) {
+        showNotification('Error', 'No se pudo crear el tema', 'error');
+    }
+}
+
+// Load Content for Gallery
+async function loadContent() {
+    try {
+        const response = await fetch('/api/content');
+        const { images, videos } = await response.json();
+
+        const grid = document.getElementById('contentGrid');
+        grid.innerHTML = '';
+
+        const allContent = [
+            ...images.map(i => ({ ...i, type: 'image' })),
+            ...videos.map(v => ({ ...v, type: 'video' }))
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        const filteredContent = selectedTopicId === 'all'
+            ? allContent
+            : allContent.filter(item => item.topicId == selectedTopicId);
+
+        if (filteredContent.length === 0) {
+            grid.innerHTML = '<p class="text-muted">No hay contenido en este tema.</p>';
+            return;
+        }
+
+        filteredContent.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'content-card';
+
+            let mediaHtml = '';
+            if (item.type === 'image') {
+                mediaHtml = `<img src="/uploads/images/${item.filename}" alt="${item.originalName}">`;
+            } else {
+                mediaHtml = `<video src="/uploads/videos/${item.filename}" controls></video>`;
+            }
+
+            card.innerHTML = `
+        <div class="content-media">${mediaHtml}</div>
+        <div class="content-info">
+          <div class="content-title">${item.originalName}</div>
+          <div class="content-desc">${item.description || 'Sin descripción'}</div>
+          <div class="content-footer">
+            <span class="tag">${item.topic ? item.topic.name : 'General'}</span>
+            <span>${new Date(item.createdAt).toLocaleDateString()}</span>
+          </div>
+        </div>
+      `;
+            grid.appendChild(card);
+        });
+    } catch (error) {
+        console.error('Error loading content:', error);
+    }
+}
+
 // Upload Module Class
 class UploadModule {
     constructor(type) {
@@ -8,61 +160,35 @@ class UploadModule {
         this.preview = document.getElementById(`${type}Preview`);
         this.progressContainer = document.getElementById(`${type}Progress`);
         this.progressFill = document.getElementById(`${type}ProgressFill`);
-        this.progressText = document.getElementById(`${type}ProgressText`);
+        this.descriptionInput = document.getElementById(`${type}Description`);
+        this.topicSelect = document.getElementById(`${type}Topic`);
         this.selectedFile = null;
 
         this.init();
     }
 
     init() {
-        // Click on drop zone to open file selector
         this.dropZone.addEventListener('click', () => this.input.click());
-
-        // File input change
         this.input.addEventListener('change', (e) => this.handleFileSelect(e.target.files[0]));
 
-        // Drag and drop events
         this.dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             this.dropZone.classList.add('dragover');
         });
 
-        this.dropZone.addEventListener('dragleave', () => {
-            this.dropZone.classList.remove('dragover');
-        });
+        this.dropZone.addEventListener('dragleave', () => this.dropZone.classList.remove('dragover'));
 
         this.dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             this.dropZone.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            this.handleFileSelect(file);
+            this.handleFileSelect(e.dataTransfer.files[0]);
         });
 
-        // Upload button click
         this.uploadBtn.addEventListener('click', () => this.uploadFile());
     }
 
     handleFileSelect(file) {
         if (!file) return;
-
-        // Validate file type
-        const validTypes = this.type === 'image'
-            ? ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-            : ['video/mp4', 'video/avi', 'video/quicktime', 'video/x-ms-wmv', 'video/x-flv', 'video/webm', 'video/x-matroska'];
-
-        if (!validTypes.includes(file.type)) {
-            showNotification('Error', `Tipo de archivo no válido para ${this.type}`, 'error');
-            return;
-        }
-
-        // Validate file size
-        const maxSize = this.type === 'image' ? 10 * 1024 * 1024 : 100 * 1024 * 1024;
-        if (file.size > maxSize) {
-            const maxSizeMB = maxSize / (1024 * 1024);
-            showNotification('Error', `El archivo excede el tamaño máximo de ${maxSizeMB}MB`, 'error');
-            return;
-        }
-
         this.selectedFile = file;
         this.showPreview(file);
         this.uploadBtn.disabled = false;
@@ -72,32 +198,19 @@ class UploadModule {
     showPreview(file) {
         this.preview.classList.remove('empty');
         this.preview.innerHTML = '';
-
         const container = document.createElement('div');
         container.className = 'preview-content';
 
         if (this.type === 'image') {
             const img = document.createElement('img');
             img.src = URL.createObjectURL(file);
-            img.alt = 'Preview';
             container.appendChild(img);
         } else {
             const video = document.createElement('video');
             video.src = URL.createObjectURL(file);
             video.controls = true;
-            video.style.maxWidth = '100%';
             container.appendChild(video);
         }
-
-        const info = document.createElement('div');
-        info.className = 'file-info';
-        info.innerHTML = `
-      <strong>Archivo:</strong> ${file.name}<br>
-      <strong>Tamaño:</strong> ${this.formatFileSize(file.size)}<br>
-      <strong>Tipo:</strong> ${file.type}
-    `;
-        container.appendChild(info);
-
         this.preview.appendChild(container);
     }
 
@@ -106,103 +219,55 @@ class UploadModule {
 
         const formData = new FormData();
         formData.append(this.type, this.selectedFile);
+        formData.append('description', this.descriptionInput.value);
+        formData.append('topicId', this.topicSelect.value);
 
         this.uploadBtn.disabled = true;
-        this.uploadBtn.querySelector('.btn-text').innerHTML = '<span class="loading"></span>';
         this.progressContainer.classList.add('active');
         this.progressFill.style.width = '0%';
 
         try {
-            // Simulate progress (since we can't track real upload progress easily with fetch)
-            this.simulateProgress();
-
             const response = await fetch(`/api/upload/${this.type}`, {
                 method: 'POST',
                 body: formData
             });
 
-            const data = await response.json();
-
             if (response.ok) {
                 this.progressFill.style.width = '100%';
-                this.progressText.textContent = '¡Completado!';
-
-                showNotification(
-                    '✅ Éxito',
-                    `${this.type === 'image' ? 'Imagen' : 'Video'} subido correctamente. Webhook enviado a n8n.`,
-                    'success'
-                );
-
-                // Reset after delay
-                setTimeout(() => {
-                    this.reset();
-                }, 2000);
+                showNotification('✅ Éxito', 'Archivo subido correctamente', 'success');
+                setTimeout(() => this.reset(), 1000);
+                loadContent();
             } else {
-                throw new Error(data.error || 'Error al subir el archivo');
+                const data = await response.json();
+                throw new Error(data.error || 'Error en la subida');
             }
         } catch (error) {
-            console.error('Upload error:', error);
             showNotification('❌ Error', error.message, 'error');
-            this.reset();
+            this.uploadBtn.disabled = false;
         }
-    }
-
-    simulateProgress() {
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += Math.random() * 30;
-            if (progress > 90) {
-                clearInterval(interval);
-                progress = 90;
-            }
-            this.progressFill.style.width = `${progress}%`;
-            this.progressText.textContent = `Subiendo... ${Math.round(progress)}%`;
-        }, 200);
     }
 
     reset() {
         this.selectedFile = null;
         this.input.value = '';
+        this.descriptionInput.value = '';
         this.uploadBtn.disabled = true;
         this.uploadBtn.querySelector('.btn-text').textContent = `Selecciona ${this.type === 'image' ? 'una imagen' : 'un video'}`;
         this.progressContainer.classList.remove('active');
-        this.progressFill.style.width = '0%';
-
-        // Keep preview visible but could reset if desired
-        // this.preview.classList.add('empty');
-        // this.preview.innerHTML = '<div class="preview-placeholder"><p>La vista previa aparecerá aquí</p></div>';
-    }
-
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+        this.preview.classList.add('empty');
+        this.preview.innerHTML = '<div class="preview-placeholder"><p>La vista previa aparecerá aquí</p></div>';
     }
 }
 
 // Notification System
 function showNotification(title, message, type = 'success') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.innerHTML = `
-    <div class="notification-title">${title}</div>
-    <div class="notification-message">${message}</div>
-  `;
-
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-        notification.style.animation = 'slideIn 0.3s ease reverse';
-        setTimeout(() => notification.remove(), 300);
-    }, 4000);
+    const el = document.createElement('div');
+    el.className = `notification ${type}`;
+    el.innerHTML = `<strong>${title}</strong>: ${message}`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
 }
 
-// Initialize upload modules
+// Initialize Modules
 const imageUpload = new UploadModule('image');
 const videoUpload = new UploadModule('video');
-
-// Log initialization
-console.log('🚀 Upload & Webhook App initialized');
-console.log('📡 Webhook endpoint: http://localhost:3000/webhook/n8n');

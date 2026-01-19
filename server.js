@@ -1,11 +1,13 @@
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const { Topic, Image, Video, sequelize } = require('./models');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
@@ -41,7 +43,7 @@ const imageUpload = multer({
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-    
+
     if (extname && mimetype) {
       return cb(null, true);
     } else {
@@ -68,7 +70,7 @@ const videoUpload = multer({
     const allowedTypes = /mp4|avi|mov|wmv|flv|webm|mkv/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-    
+
     if (extname && mimetype) {
       return cb(null, true);
     } else {
@@ -79,10 +81,8 @@ const videoUpload = multer({
 
 // Webhook notification function
 async function sendWebhookNotification(data) {
-  // This function sends data to n8n webhook
-  // You can configure the webhook URL here
-  const webhookUrl = 'http://localhost:5678/webhook/upload'; // Default n8n webhook URL
-  
+  const webhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/upload';
+
   try {
     const response = await fetch(webhookUrl, {
       method: 'POST',
@@ -91,8 +91,8 @@ async function sendWebhookNotification(data) {
       },
       body: JSON.stringify(data)
     });
-    
-    console.log('Webhook notification sent:', data);
+
+    console.log('Webhook notification sent to n8n');
     return { success: true, status: response.status };
   } catch (error) {
     console.error('Error sending webhook notification:', error.message);
@@ -100,9 +100,29 @@ async function sendWebhookNotification(data) {
   }
 }
 
-// Routes
+// Basic Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Topic Routes
+app.get('/api/topics', async (req, res) => {
+  try {
+    const topics = await Topic.findAll();
+    res.json(topics);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/topics', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const topic = await Topic.create({ name, description });
+    res.json(topic);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Image upload endpoint
@@ -112,14 +132,30 @@ app.post('/api/upload/image', imageUpload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
     }
 
+    const { description, topicId } = req.body;
+
+    // Save to Database
+    const dbImage = await Image.create({
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      description: description || '',
+      filePath: req.file.path,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      topicId: topicId || null
+    });
+
     const fileData = {
+      id: dbImage.id,
       type: 'image',
       filename: req.file.filename,
       originalName: req.file.originalname,
+      description: description || '',
       size: req.file.size,
       mimetype: req.file.mimetype,
       path: req.file.path,
-      uploadedAt: new Date().toISOString()
+      topicId: topicId || null,
+      uploadedAt: dbImage.createdAt
     };
 
     // Send webhook notification
@@ -142,14 +178,30 @@ app.post('/api/upload/video', videoUpload.single('video'), async (req, res) => {
       return res.status(400).json({ error: 'No se ha subido ningún video' });
     }
 
+    const { description, topicId } = req.body;
+
+    // Save to Database
+    const dbVideo = await Video.create({
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      description: description || '',
+      filePath: req.file.path,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      topicId: topicId || null
+    });
+
     const fileData = {
+      id: dbVideo.id,
       type: 'video',
       filename: req.file.filename,
       originalName: req.file.originalname,
+      description: description || '',
       size: req.file.size,
       mimetype: req.file.mimetype,
       path: req.file.path,
-      uploadedAt: new Date().toISOString()
+      topicId: topicId || null,
+      uploadedAt: dbVideo.createdAt
     };
 
     // Send webhook notification
@@ -165,13 +217,24 @@ app.post('/api/upload/video', videoUpload.single('video'), async (req, res) => {
   }
 });
 
-// Webhook endpoint for n8n (to receive data FROM n8n if needed)
+// Get all content
+app.get('/api/content', async (req, res) => {
+  try {
+    const images = await Image.findAll({ include: 'topic' });
+    const videos = await Video.findAll({ include: 'topic' });
+    res.json({ images, videos });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Webhook endpoint for n8n
 app.post('/webhook/n8n', (req, res) => {
   console.log('Webhook received from n8n:', req.body);
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'Webhook recibido correctamente',
-    receivedData: req.body 
+    receivedData: req.body
   });
 });
 
@@ -185,9 +248,34 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: error.message });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-  console.log(`📁 Archivos guardados en: ${uploadsDir}`);
-  console.log(`🔗 Webhook endpoint: http://localhost:${PORT}/webhook/n8n`);
-});
+// Initialize DB and Start server
+const start = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('✅ Connection to PostgreSQL has been established successfully.');
+
+    // Sync models
+    await sequelize.sync({ alter: true });
+    console.log('✅ All models were synchronized successfully.');
+
+    // Create a default topic if none exist
+    const count = await Topic.count();
+    if (count === 0) {
+      await Topic.create({ name: 'General', description: 'Categoría por defecto' });
+    }
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+      console.log(`🔗 Webhook endpoint: http://localhost:${PORT}/webhook/n8n`);
+    });
+  } catch (error) {
+    console.error('❌ Unable to connect to the database:', error);
+    // If DB fails, we still start the server but log the error
+    // This is useful for initial setup where DB might not be ready
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor corriendo en modo degradado (sin DB) en http://localhost:${PORT}`);
+    });
+  }
+};
+
+start();

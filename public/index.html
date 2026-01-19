@@ -1,21 +1,38 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Aplicación de carga de archivos con integración webhook para n8n">
-  <title>Upload & Webhook App</title>
+  <meta name="description" content="Aplicación de carga de archivos con integración PostgreSQL y n8n">
+  <title>Upload & Webhook App | PostgreSQL</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div class="container">
     <header>
       <h1>📤 Upload & Webhook</h1>
-      <p class="subtitle">Sube imágenes y videos con integración automática a n8n</p>
+      <p class="subtitle">Sube imágenes y videos con descripciones y temas individuales</p>
     </header>
+
+    <!-- Topic Management -->
+    <div class="topic-section">
+      <div class="glass-card">
+        <h3>🏷️ Temas / Categorías</h3>
+        <div class="topic-form" id="topicForm">
+          <input type="text" id="newTopicName" placeholder="Nuevo tema (ej: Vacaciones, Trabajo...)">
+          <button class="btn btn-small" id="addTopicBtn">Añadir Tema</button>
+        </div>
+        <div class="topic-list" id="topicTabs">
+          <button class="topic-tab active" data-topic-id="all">Todos</button>
+          <!-- Topics will be loaded here -->
+        </div>
+      </div>
+    </div>
 
     <div class="upload-grid">
       <!-- Image Upload Module -->
@@ -25,14 +42,26 @@
           <h2 class="module-title">Subir Imagen</h2>
         </div>
 
+        <div class="form-group">
+          <label for="imageTopic">Tema de la imagen:</label>
+          <select id="imageTopic" class="form-select">
+            <!-- Topics will be loaded here -->
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="imageDescription">Descripción:</label>
+          <textarea id="imageDescription" placeholder="Escribe una descripción para esta imagen..." rows="3"></textarea>
+        </div>
+
         <div class="upload-zone" id="imageDropZone">
           <div class="upload-icon">📸</div>
-          <p class="upload-text">Arrastra una imagen aquí o haz clic para seleccionar</p>
-          <p class="upload-hint">Formatos: JPG, PNG, GIF, WEBP (Máx. 10MB)</p>
+          <p class="upload-text">Arrastra una imagen aquí o haz clic</p>
+          <p class="upload-hint">JPG, PNG, GIF, WEBP (Máx. 10MB)</p>
         </div>
 
         <input type="file" id="imageInput" accept="image/*">
-        
+
         <button class="btn" id="imageUploadBtn" disabled>
           <span class="btn-text">Selecciona una imagen</span>
         </button>
@@ -41,7 +70,7 @@
           <div class="progress-bar">
             <div class="progress-fill" id="imageProgressFill" style="width: 0%"></div>
           </div>
-          <p class="progress-text" id="imageProgressText">Subiendo...</p>
+          <p class="progress-text">Subiendo...</p>
         </div>
 
         <div class="preview-area empty" id="imagePreview">
@@ -58,14 +87,26 @@
           <h2 class="module-title">Subir Video</h2>
         </div>
 
+        <div class="form-group">
+          <label for="videoTopic">Tema del video:</label>
+          <select id="videoTopic" class="form-select">
+            <!-- Topics will be loaded here -->
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="videoDescription">Descripción:</label>
+          <textarea id="videoDescription" placeholder="Escribe una descripción para este video..." rows="3"></textarea>
+        </div>
+
         <div class="upload-zone" id="videoDropZone">
           <div class="upload-icon">🎥</div>
-          <p class="upload-text">Arrastra un video aquí o haz clic para seleccionar</p>
-          <p class="upload-hint">Formatos: MP4, AVI, MOV, WEBM (Máx. 100MB)</p>
+          <p class="upload-text">Arrastra un video aquí o haz clic</p>
+          <p class="upload-hint">MP4, AVI, MOV, WEBM (Máx. 100MB)</p>
         </div>
 
         <input type="file" id="videoInput" accept="video/*">
-        
+
         <button class="btn" id="videoUploadBtn" disabled>
           <span class="btn-text">Selecciona un video</span>
         </button>
@@ -74,7 +115,7 @@
           <div class="progress-bar">
             <div class="progress-fill" id="videoProgressFill" style="width: 0%"></div>
           </div>
-          <p class="progress-text" id="videoProgressText">Subiendo...</p>
+          <p class="progress-text">Subiendo...</p>
         </div>
 
         <div class="preview-area empty" id="videoPreview">
@@ -85,37 +126,30 @@
       </div>
     </div>
 
+    <!-- Gallery Section -->
+    <div class="gallery-section">
+      <h2>📁 Contenido Guardado</h2>
+      <div class="content-grid" id="contentGrid">
+        <!-- Uploaded content will be loaded here -->
+      </div>
+    </div>
+
     <!-- Webhook Information -->
     <div class="webhook-info">
-      <h2>🔗 Información del Webhook</h2>
+      <h2>🔗 Automatización n8n + PostgreSQL</h2>
       <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md);">
-        Cada vez que subas un archivo, se enviará automáticamente una notificación al webhook de n8n.
+        Cada carga guarda la metadata en PostgreSQL y notifica al webhook de n8n incluyendo la descripción y el tema.
       </p>
-      
-      <h3 style="font-size: 1.125rem; margin-bottom: var(--spacing-sm); color: var(--text-primary);">
-        Endpoint del Servidor:
-      </h3>
+
       <div class="webhook-endpoint">http://localhost:3000/webhook/n8n</div>
-      
-      <h3 style="font-size: 1.125rem; margin: var(--spacing-md) 0 var(--spacing-sm); color: var(--text-primary);">
-        Datos enviados al webhook:
-      </h3>
-      <ul>
-        <li><strong>type:</strong> "image" o "video"</li>
-        <li><strong>filename:</strong> Nombre del archivo guardado</li>
-        <li><strong>originalName:</strong> Nombre original del archivo</li>
-        <li><strong>size:</strong> Tamaño en bytes</li>
-        <li><strong>mimetype:</strong> Tipo MIME del archivo</li>
-        <li><strong>path:</strong> Ruta donde se guardó el archivo</li>
-        <li><strong>uploadedAt:</strong> Fecha y hora de subida</li>
-      </ul>
-      
+
       <p style="color: var(--text-muted); margin-top: var(--spacing-md); font-size: 0.875rem;">
-        💡 Configura tu workflow de n8n para escuchar en <code style="color: var(--secondary);">http://localhost:5678/webhook/upload</code>
+        💡 Configurado para Railway con DB externa.
       </p>
     </div>
   </div>
 
   <script src="app.js"></script>
 </body>
+
 </html>
