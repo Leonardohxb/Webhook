@@ -1,9 +1,13 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-const databaseUrl = process.env.DATABASE_URL || 'postgres://localhost:5432/webhook_db_placeholder';
+const databaseUrl = process.env.DATABASE_URL;
 
-const sequelize = new Sequelize(databaseUrl, {
+if (!databaseUrl && process.env.NODE_ENV === 'production') {
+    console.error('❌ CRITICAL ERROR: DATABASE_URL environment variable is not defined!');
+}
+
+const sequelize = new Sequelize(databaseUrl || 'postgres://localhost:5432/webhook_db_placeholder', {
     dialect: 'postgres',
     logging: false,
     dialectOptions: process.env.NODE_ENV === 'production' ? {
