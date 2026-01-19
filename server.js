@@ -256,36 +256,39 @@ app.use((error, req, res, next) => {
 // Initialize DB and Start server
 const start = async () => {
   try {
-    console.log('📡 Iniciando servidor...');
+    console.log('📡 Iniciando servidor Express...');
+
+    // 1. Iniciamos el servidor PRIMERO para que Railway lo marque como saludable
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Servidor activo en puerto ${PORT}`);
+      console.log(`🔗 Saludable en: /health`);
+      console.log(`🔗 Webhook endpoint: /webhook/n8n`);
+    });
+
+    // 2. Conectamos a la base de datos en SEGUNDO plano
     if (!process.env.DATABASE_URL) {
-      console.warn('⚠️  DATABASE_URL no está definida. La base de datos no estará disponible.');
+      console.warn('⚠️  ADVERTENCIA: DATABASE_URL no está definida. Operando sin DB.');
     } else {
+      console.log('🔄 Intentando conectar a la base de datos...');
       try {
         await sequelize.authenticate();
-        console.log('✅ Connection to PostgreSQL has been established successfully.');
+        console.log('✅ Conexión a PostgreSQL establecida.');
 
-        // Sync models
         await sequelize.sync({ alter: true });
-        console.log('✅ All models were synchronized successfully.');
+        console.log('✅ Modelos sincronizados correctamente.');
 
-        // Create a default topic if none exist
         const count = await Topic.count();
         if (count === 0) {
           await Topic.create({ name: 'General', description: 'Categoría por defecto' });
           console.log('📝 Tema "General" creado.');
         }
       } catch (dbError) {
-        console.error('❌ Error al inicializar la base de datos:', dbError.message);
-        console.log('⚠️ El servidor continuará sin base de datos activa.');
+        console.error('❌ Error de Base de Datos:', dbError.message);
+        console.log('⚠️ La aplicación seguirá funcionando pero no podrá guardar datos.');
       }
     }
-
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-      console.log(`🔗 Webhook endpoint: /webhook/n8n`);
-    });
   } catch (error) {
-    console.error('❌ Error crítico al iniciar el servidor:', error);
+    console.error('❌ Error crítico al iniciar:', error);
     process.exit(1);
   }
 };
