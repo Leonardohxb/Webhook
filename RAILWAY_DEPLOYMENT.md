@@ -9,6 +9,7 @@ Este documento detalla la nueva estructura de la aplicación y los pasos para de
 - **Temas/Categorías**: Organización del contenido por temas individuales.
 - **Galería Integrada**: Sección para ver y filtrar el contenido subido.
 - **Preparado para Railway**: Configuración lista para despliegue inmediato.
+- **URL de Producción**: `https://webhook-production-b0af.up.railway.app/`
 
 ## 🛠️ Estructura de la Base de Datos
 
@@ -83,7 +84,21 @@ Si quieres probarlo localmente con una base de datos real:
 
 ## 🔗 Integración con n8n
 
-El JSON que recibe n8n ahora incluye los nuevos campos:
+Para que la comunicación funcione, debes configurar dos partes:
+
+### 1. En la App (Railway)
+Debes decirle a la aplicación a **qué URL de n8n** debe enviar los datos.
+1. Ve a Railway -> Tu Servicio -> Variables.
+2. Añade/Edita la variable `N8N_WEBHOOK_URL`.
+3. El valor debe ser la **URL de producción del nodo Webhook en n8n**.
+
+### 2. En n8n (Recibir datos de la app)
+Si quieres que n8n reciba datos de tu app, la URL que ves en n8n debe ser la que pongas en `N8N_WEBHOOK_URL`.
+
+Si n8n necesita enviar datos *hacia* tu app, usa:
+`https://webhook-production-b0af.up.railway.app/webhook/n8n`
+
+### Formato del JSON que recibe n8n:
 ```json
 {
   "id": 1,
