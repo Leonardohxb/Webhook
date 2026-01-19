@@ -15,12 +15,17 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadTopics() {
     try {
         const response = await fetch('/api/topics');
-        topics = await response.json();
+        if (!response.ok) throw new Error('API Error');
+        const data = await response.json();
+
+        // Ensure data is an array
+        topics = Array.isArray(data) ? data : [];
 
         updateTopicSelectors();
         updateTopicTabs();
     } catch (error) {
         console.error('Error loading topics:', error);
+        topics = []; // Reset on error
     }
 }
 
@@ -102,7 +107,11 @@ async function createTopic() {
 async function loadContent() {
     try {
         const response = await fetch('/api/content');
-        const { images, videos } = await response.json();
+        if (!response.ok) throw new Error('API Error');
+        const data = await response.json();
+
+        const images = Array.isArray(data.images) ? data.images : [];
+        const videos = Array.isArray(data.videos) ? data.videos : [];
 
         const grid = document.getElementById('contentGrid');
         grid.innerHTML = '';

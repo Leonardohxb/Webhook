@@ -105,6 +105,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Health check for Railway
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Topic Routes
 app.get('/api/topics', async (req, res) => {
   try {
@@ -251,35 +256,37 @@ app.use((error, req, res, next) => {
 // Initialize DB and Start server
 const start = async () => {
   try {
+    console.log('📡 Iniciando servidor...');
     if (!process.env.DATABASE_URL) {
       console.warn('⚠️  DATABASE_URL no está definida. La base de datos no estará disponible.');
-      throw new Error('DATABASE_URL is missing');
+    } else {
+      try {
+        await sequelize.authenticate();
+        console.log('✅ Connection to PostgreSQL has been established successfully.');
+
+        // Sync models
+        await sequelize.sync({ alter: true });
+        console.log('✅ All models were synchronized successfully.');
+
+        // Create a default topic if none exist
+        const count = await Topic.count();
+        if (count === 0) {
+          await Topic.create({ name: 'General', description: 'Categoría por defecto' });
+          console.log('📝 Tema "General" creado.');
+        }
+      } catch (dbError) {
+        console.error('❌ Error al inicializar la base de datos:', dbError.message);
+        console.log('⚠️ El servidor continuará sin base de datos activa.');
+      }
     }
 
-    await sequelize.authenticate();
-    console.log('✅ Connection to PostgreSQL has been established successfully.');
-
-    // Sync models
-    await sequelize.sync({ alter: true });
-    console.log('✅ All models were synchronized successfully.');
-
-    // Create a default topic if none exist
-    const count = await Topic.count();
-    if (count === 0) {
-      await Topic.create({ name: 'General', description: 'Categoría por defecto' });
-    }
-
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-      console.log(`🔗 Webhook endpoint: http://localhost:${PORT}/webhook/n8n`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+      console.log(`🔗 Webhook endpoint: /webhook/n8n`);
     });
   } catch (error) {
-    console.error('❌ Unable to connect to the database:', error);
-    // If DB fails, we still start the server but log the error
-    // This is useful for initial setup where DB might not be ready
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor corriendo en modo degradado (sin DB) en http://localhost:${PORT}`);
-    });
+    console.error('❌ Error crítico al iniciar el servidor:', error);
+    process.exit(1);
   }
 };
 
