@@ -43,10 +43,25 @@ El proyecto ya está en tu repositorio: [Leonardohxb/Webhook](https://github.com
 ### 4. Configurar Variables de Entorno
 Railway debería detectar automáticamente la mayoría, pero asegúrate de que en el servicio de tu app (Webhook) existan estas variables:
 
-- `DATABASE_URL`: `${{Postgres.DATABASE_URL}}` (Railway suele conectarlo solo).
+- `DATABASE_URL`: `${{Postgres.DATABASE_URL}}` (Railway suele conectarlo solo, pero si falta, añádela manualmente con este valor).
 - `PORT`: `3000`
 - `NODE_ENV`: `production`
 - `N8N_WEBHOOK_URL`: La URL de tu webhook de n8n.
+
+---
+
+## ❌ Solución a Errores Comunes
+
+### Error: `The "url" argument must be of type string. Received undefined`
+Este error ocurre porque la aplicación no encuentra la variable de entorno `DATABASE_URL`.
+
+**Cómo solucionarlo:**
+1. Ve al dashboard de Railway.
+2. Selecciona tu servicio de **backend** (el que tiene el código).
+3. Ve a la pestaña **"Variables"**.
+4. Verifica que `DATABASE_URL` aparezca en la lista.
+5. Si no aparece, haz click en **"New Variable"**, pon el nombre `DATABASE_URL` y en el valor selecciona la opción que dice `${{Postgres.DATABASE_URL}}` (esto vincula automáticamente la base de datos).
+6. Railway reiniciará la app automáticamente y el error desaparecerá.
 
 ### 5. Advertencia sobre Almacenamiento
 > [!WARNING]

@@ -251,6 +251,11 @@ app.use((error, req, res, next) => {
 // Initialize DB and Start server
 const start = async () => {
   try {
+    if (!process.env.DATABASE_URL) {
+      console.warn('⚠️  DATABASE_URL no está definida. La base de datos no estará disponible.');
+      throw new Error('DATABASE_URL is missing');
+    }
+
     await sequelize.authenticate();
     console.log('✅ Connection to PostgreSQL has been established successfully.');
 

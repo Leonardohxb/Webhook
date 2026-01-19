@@ -1,7 +1,7 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL || 'postgres://localhost:5432/webhook_db_placeholder';
 
 const sequelize = new Sequelize(databaseUrl, {
     dialect: 'postgres',
